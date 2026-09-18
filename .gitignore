@@ -35,8 +35,8 @@ dist/
 __MACOSX/
 .claude/
 # generated from the source sheet by tools/sheet2neo.py
-assets/ninja-walk.gif
-assets/ninja-walk.h
+assets/hero.gif
+assets/hero.h
 # MAME working files
 cfg/
 snap/

@@ -47,20 +47,21 @@ $(SROM1): $(BUILDDIR)/assets/base-srom-text-shadow.fix
 
 
 # sprite ROM: BIOS eye-catcher tiles (0-255), then our own ----------------
-# The walk cycle lands at tile 256 and occupies 160 tiles (8 frames of 4x5).
+# The hero's animations land at tile 256.
 $(CROM1): $(BUILDDIR)/assets/base-crom-logo.c1
 $(CROM2): $(BUILDDIR)/assets/base-crom-logo.c2
-$(CROM1): $(BUILDDIR)/assets/ninja-walk.c1
-$(CROM2): $(BUILDDIR)/assets/ninja-walk.c2
+$(CROM1): $(BUILDDIR)/assets/hero.c1
+$(CROM2): $(BUILDDIR)/assets/hero.c2
 
-# Regenerate the tile sheet and its palette from the source art.
-SHEET=assets/948be4bd2e07ccf115e5baf91008b1de.png
-assets/ninja-walk.gif assets/ninja-walk.h: $(SHEET) tools/sheet2neo.py
-	$(PYTHON) tools/sheet2neo.py $(SHEET) -o assets/ninja-walk.gif \
-	    --region 0,330,530,100 --frames 8 \
-	    --header assets/ninja-walk.h --name ninja
+# Regenerate the tile sheet and its palette from the source art. Every
+# animation shares one palette, so they must be converted in one go.
+SHEET=assets/dfbf14334572aaf4dccdf18cf2a1a234.png
+assets/hero.gif assets/hero.h: $(SHEET) tools/sheet2neo.py
+	$(PYTHON) tools/sheet2neo.py $(SHEET) \
+	    -o assets/hero.gif --header assets/hero.h --name hero \
+	    --anim walk:1 --anim attack:2 --anim jump:4:4-8 --anim crouch:5:2-4
 
-$(BUILDDIR)/main.o: assets/ninja-walk.h
+$(BUILDDIR)/main.o: assets/hero.h
 
 
 # sound driver ROM: ngdevkit's stock driver, enough to satisfy the BIOS ---
