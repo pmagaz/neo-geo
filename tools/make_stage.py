@@ -33,9 +33,9 @@ W = 320
 
 # Where each layer sits on screen and how tall it is. The sky reaches down
 # behind the hills; the hills are transparent above their ridges.
-SKY_Y, SKY_H = 0, 176
-HILLS_Y, HILLS_H = 96, 80
-GROUND_Y, GROUND_H = 160, 64
+SKY_Y, SKY_H = 0, 192
+HILLS_Y, HILLS_H = 112, 80
+GROUND_Y, GROUND_H = 176, 48
 
 # Index 0 must stay transparent, so the stage draws with indices 1-15.
 PALETTE = [
@@ -162,7 +162,7 @@ def main():
     p.add_argument("--outdir", default="assets", help="where to write the GIFs")
     p.add_argument("--header", required=True, help="C header to write")
     p.add_argument("--name", default="stage", help="identifier prefix")
-    p.add_argument("--ground", type=int, default=168,
+    p.add_argument("--ground", type=int, default=192,
                    help="y of the ground line the character stands on")
     p.add_argument("--seed", type=int, default=7, help="scenery random seed")
     args = p.parse_args()
