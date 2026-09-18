@@ -10,11 +10,20 @@
 #include <ngdevkit/ng-fix.h>
 #include <stdio.h>
 #include "hero.h"
+#include "stage.h"
 
 /// The BIOS eye-catcher owns C ROM tiles 0-255, so ours start at 256.
 #define HERO_TILE 256
-/// Sprite 0 is never drawn by the LSPC, so the first usable sprite is 1.
-#define FIRST_SPRITE 1
+/// The stage's tiles are loaded straight after the hero's.
+#define STAGE_TILE (HERO_TILE + HERO_TILE_COUNT)
+
+/*
+ * Sprite numbering decides drawing order: higher numbers are drawn in front.
+ * The Neo Geo has no background layer, so the stage is sprites too - it just
+ * has to come first. Sprite 0 is never drawn by the LSPC.
+ */
+#define BG_SPRITE 1
+#define FIRST_SPRITE (BG_SPRITE + STAGE_TILES_W)
 
 #define SCREEN_W 320
 #define SCREEN_H 224
@@ -24,7 +33,8 @@
 #define WALK_SPEED 2
 #define JUMP_SPEED (-9)
 #define GRAVITY 1
-#define GROUND_Y (SCREEN_H - CHAR_H - 26)
+/// Stand on the stage's ground line.
+#define GROUND_Y (STAGE_GROUND_Y - CHAR_H)
 
 /* Game frames each animation frame is held for. */
 #define WALK_RATE 4
@@ -63,8 +73,42 @@ static void init_palette(void) {
 
     for (u16 i = 0; i < 16; i++) {
         MMAP_PALBANK1[i] = text_palette[i];
-        MMAP_PALBANK1[16 + i] = hero_palette[i];
+        MMAP_PALBANK1[16 + i] = hero_palette[i];    /* palette 1 */
+        MMAP_PALBANK1[32 + i] = stage_palette[i];   /* palette 2 */
     }
+}
+
+
+/*
+ * Lay the stage out as a row of sprite columns, one per 16 pixels of screen.
+ *
+ * Like the character, they are chained with the sticky bit: only the leftmost
+ * carries a position and each of the others sits immediately to the right of
+ * the one before it. The stage never moves, so this is written once.
+ */
+static void init_stage(void) {
+    for (u16 col = 0; col < STAGE_TILES_W; col++) {
+        *REG_VRAMMOD = 1;
+        *REG_VRAMADDR = ADDR_SCB1 + (BG_SPRITE + col) * 64;
+        for (u16 row = 0; row < STAGE_TILES_H; row++) {
+            *REG_VRAMRW = STAGE_TILE + row * STAGE_TILES_W + col;
+            *REG_VRAMRW = 2 << 8;               /* palette 2, no flipping */
+        }
+
+        *REG_VRAMMOD = 0;
+        *REG_VRAMADDR = ADDR_SCB2 + BG_SPRITE + col;
+        *REG_VRAMRW = 0xfff;                    /* no shrinking */
+
+        *REG_VRAMADDR = ADDR_SCB3 + BG_SPRITE + col;
+        if (col == 0) {
+            *REG_VRAMRW = ((496 - 0) & 0x1ff) << 7 | STAGE_TILES_H;
+        } else {
+            *REG_VRAMRW = 1 << 6;               /* sticky: follow the previous */
+        }
+    }
+
+    *REG_VRAMADDR = ADDR_SCB4 + BG_SPRITE;
+    *REG_VRAMRW = 0;                            /* leftmost column at x = 0 */
 }
 
 
@@ -246,10 +290,10 @@ static void wait_vblank(void) {
 int main(void) {
     ng_cls();
     init_palette();
+    init_stage();
     init_hero();
 
-    ng_center_text(2, 0, "NEO GEO - ITERATION 3");
-    ng_center_text(27, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+    ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
 
     for (;;) {
         update_hero();

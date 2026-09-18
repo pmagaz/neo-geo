@@ -52,16 +52,24 @@ $(CROM1): $(BUILDDIR)/assets/base-crom-logo.c1
 $(CROM2): $(BUILDDIR)/assets/base-crom-logo.c2
 $(CROM1): $(BUILDDIR)/assets/hero.c1
 $(CROM2): $(BUILDDIR)/assets/hero.c2
+$(CROM1): $(BUILDDIR)/assets/stage.c1
+$(CROM2): $(BUILDDIR)/assets/stage.c2
 
 # Regenerate the tile sheet and its palette from the source art. Every
 # animation shares one palette, so they must be converted in one go.
 SHEET=assets/dfbf14334572aaf4dccdf18cf2a1a234.png
 assets/hero.gif assets/hero.h: $(SHEET) tools/sheet2neo.py
-	$(PYTHON) tools/sheet2neo.py $(SHEET) \
+	PYTHONPATH=tools $(PYTHON) tools/sheet2neo.py $(SHEET) \
 	    -o assets/hero.gif --header assets/hero.h --name hero \
 	    --anim walk:1 --anim attack:2 --anim jump:4:4-8 --anim crouch:5:2-4
 
-$(BUILDDIR)/main.o: assets/hero.h
+# The stage is drawn rather than converted, since the Neo Geo has no
+# background layer and it has to be built from sprite tiles anyway.
+assets/stage.gif assets/stage.h: tools/make_stage.py
+	PYTHONPATH=tools $(PYTHON) tools/make_stage.py \
+	    -o assets/stage.gif --header assets/stage.h --name stage
+
+$(BUILDDIR)/main.o: assets/hero.h assets/stage.h
 
 
 # sound driver ROM: ngdevkit's stock driver, enough to satisfy the BIOS ---
