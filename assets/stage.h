@@ -2,9 +2,18 @@
 #ifndef STAGE_H
 #define STAGE_H
 
-#define STAGE_TILES_W 20
-#define STAGE_TILES_H 14
-#define STAGE_GROUND_Y 184
+#define STAGE_COLS 20
+#define STAGE_FLOOR_Y 184
+
+#define STAGE_SKY_Y 0
+#define STAGE_SKY_ROWS 12
+#define STAGE_SKY_TILE_COUNT 240
+#define STAGE_HILLS_Y 112
+#define STAGE_HILLS_ROWS 5
+#define STAGE_HILLS_TILE_COUNT 100
+#define STAGE_GROUND_Y 176
+#define STAGE_GROUND_ROWS 3
+#define STAGE_GROUND_TILE_COUNT 60
 
 /* 16 colours, index 0 transparent. */
 static const u16 stage_palette[16] = {

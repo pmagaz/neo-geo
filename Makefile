@@ -52,8 +52,12 @@ $(CROM1): $(BUILDDIR)/assets/base-crom-logo.c1
 $(CROM2): $(BUILDDIR)/assets/base-crom-logo.c2
 $(CROM1): $(BUILDDIR)/assets/hero.c1
 $(CROM2): $(BUILDDIR)/assets/hero.c2
-$(CROM1): $(BUILDDIR)/assets/stage.c1
-$(CROM2): $(BUILDDIR)/assets/stage.c2
+$(CROM1): $(BUILDDIR)/assets/stage-sky.c1
+$(CROM2): $(BUILDDIR)/assets/stage-sky.c2
+$(CROM1): $(BUILDDIR)/assets/stage-hills.c1
+$(CROM2): $(BUILDDIR)/assets/stage-hills.c2
+$(CROM1): $(BUILDDIR)/assets/stage-ground.c1
+$(CROM2): $(BUILDDIR)/assets/stage-ground.c2
 
 # Regenerate the tile sheet and its palette from the source art. Every
 # animation shares one palette, so they must be converted in one go.
@@ -65,9 +69,10 @@ assets/hero.gif assets/hero.h: $(SHEET) tools/sheet2neo.py
 
 # The stage is drawn rather than converted, since the Neo Geo has no
 # background layer and it has to be built from sprite tiles anyway.
-assets/stage.gif assets/stage.h: tools/make_stage.py
+STAGE_LAYERS=assets/stage-sky.gif assets/stage-hills.gif assets/stage-ground.gif
+$(STAGE_LAYERS) assets/stage.h: tools/make_stage.py tools/neogeo_color.py
 	PYTHONPATH=tools $(PYTHON) tools/make_stage.py \
-	    -o assets/stage.gif --header assets/stage.h --name stage
+	    --outdir assets --header assets/stage.h --name stage
 
 $(BUILDDIR)/main.o: assets/hero.h assets/stage.h
 
