@@ -45,3 +45,5 @@ nvram/
 screen.png
 assets/stage.gif
 assets/stage.h
+__pycache__/
+*.pyc
