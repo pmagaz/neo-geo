@@ -61,7 +61,7 @@ $(CROM2): $(BUILDDIR)/assets/stage-ground.c2
 
 # Regenerate the tile sheet and its palette from the source art. Every
 # animation shares one palette, so they must be converted in one go.
-SHEET=assets/Gemini_Generated_Image_6x6ayw6x6ayw6x6a.jpeg
+SHEET=assets/dfbf14334572aaf4dccdf18cf2a1a234.png
 PREPPED=$(BUILDDIR)/assets/hero-sheet.png
 
 # The sheet arrives as a JPEG with the transparency checkerboard painted into
@@ -73,7 +73,7 @@ $(PREPPED): $(SHEET) tools/prep_sheet.py Makefile | $(BUILDDIR)/assets
 assets/hero.gif assets/hero.h: $(PREPPED) tools/sheet2neo.py tools/neogeo_color.py
 	PYTHONPATH=tools $(PYTHON) tools/sheet2neo.py $(PREPPED) \
 	    -o assets/hero.gif --header assets/hero.h --name hero \
-	    --anim walk:0 --anim attack:1 --anim jump:2:1-4 --anim crouch:2:0-1
+	    --anim walk:1 --anim attack:2 --anim jump:4:4-8 --anim crouch:5:2-4
 
 # The stage is drawn rather than converted, since the Neo Geo has no
 # background layer and it has to be built from sprite tiles anyway.

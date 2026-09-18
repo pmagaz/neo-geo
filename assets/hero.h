@@ -11,17 +11,17 @@
 #define HERO_WALK_ROW 0
 #define HERO_ATTACK_FRAMES 8
 #define HERO_ATTACK_ROW 4
-#define HERO_JUMP_FRAMES 4
+#define HERO_JUMP_FRAMES 5
 #define HERO_JUMP_ROW 8
-#define HERO_CROUCH_FRAMES 2
+#define HERO_CROUCH_FRAMES 3
 #define HERO_CROUCH_ROW 12
 
 /* 16 colours, index 0 transparent. */
 static const u16 hero_palette[16] = {
-    0x8000, 0x1b98, 0xd778, 0xc667,
-    0x2645, 0x6446, 0x8445, 0xa523,
-    0xd333, 0x8334, 0x9322, 0x0223,
-    0x4112, 0x5000, 0x9000, 0x8000,
+    0x8000, 0x1eca, 0x2d98, 0x5c75,
+    0xf866, 0xd953, 0x9843, 0xd543,
+    0xb622, 0x3421, 0xe412, 0x3311,
+    0xf211, 0xc211, 0x8200, 0x8000,
 };
 
 #endif
