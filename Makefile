@@ -6,7 +6,7 @@ all: cart bios
 BUILDDIR=build
 # directories scanned for source to compile
 SRCDIRS=assets
-CFLAGS=-I$(BUILDDIR) -std=c99 -fomit-frame-pointer -O2 -g
+CFLAGS=-I$(BUILDDIR) -Iassets -std=c99 -fomit-frame-pointer -O2 -g
 LDFLAGS=
 Z80FLAGS=
 Z80LDFLAGS=
@@ -47,10 +47,20 @@ $(SROM1): $(BUILDDIR)/assets/base-srom-text-shadow.fix
 
 
 # sprite ROM: BIOS eye-catcher tiles (0-255), then our own ----------------
+# The walk cycle lands at tile 256 and occupies 160 tiles (8 frames of 4x5).
 $(CROM1): $(BUILDDIR)/assets/base-crom-logo.c1
 $(CROM2): $(BUILDDIR)/assets/base-crom-logo.c2
-$(CROM1): $(BUILDDIR)/assets/square.c1
-$(CROM2): $(BUILDDIR)/assets/square.c2
+$(CROM1): $(BUILDDIR)/assets/ninja-walk.c1
+$(CROM2): $(BUILDDIR)/assets/ninja-walk.c2
+
+# Regenerate the tile sheet and its palette from the source art.
+SHEET=assets/948be4bd2e07ccf115e5baf91008b1de.png
+assets/ninja-walk.gif assets/ninja-walk.h: $(SHEET) tools/sheet2neo.py
+	$(PYTHON) tools/sheet2neo.py $(SHEET) -o assets/ninja-walk.gif \
+	    --region 0,330,530,100 --frames 8 \
+	    --header assets/ninja-walk.h --name ninja
+
+$(BUILDDIR)/main.o: assets/ninja-walk.h
 
 
 # sound driver ROM: ngdevkit's stock driver, enough to satisfy the BIOS ---

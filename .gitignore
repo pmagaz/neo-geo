@@ -34,3 +34,12 @@ dist/
 .DS_Store
 __MACOSX/
 .claude/
+# generated from the source sheet by tools/sheet2neo.py
+assets/ninja-walk.gif
+assets/ninja-walk.h
+# MAME working files
+cfg/
+snap/
+nvram/
+.shot/
+screen.png
