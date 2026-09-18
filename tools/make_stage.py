@@ -33,9 +33,9 @@ W = 320
 
 # Where each layer sits on screen and how tall it is. The sky reaches down
 # behind the hills; the hills are transparent above their ridges.
-SKY_Y, SKY_H = 0, 192
-HILLS_Y, HILLS_H = 112, 80
-GROUND_Y, GROUND_H = 176, 48
+SKY_Y, SKY_H = 0, 176
+HILLS_Y, HILLS_H = 96, 80
+GROUND_Y, GROUND_H = 160, 64
 
 # Index 0 must stay transparent, so the stage draws with indices 1-15.
 PALETTE = [
@@ -113,18 +113,18 @@ def draw_sky(args):
             im.putpixel((x, y), 5)
 
     # Moon, with a bite taken out of it to make a crescent.
-    mx, my, r = 248, 40, 15
+    mx, my, r = 254, 34, 11
     d.ellipse([mx - r, my - r, mx + r, my + r], fill=5)
-    d.ellipse([mx - r + 8, my - r - 3, mx + r + 8, my + r - 3], fill=2)
+    d.ellipse([mx - r + 6, my - r - 2, mx + r + 6, my + r - 2], fill=2)
     return im
 
 
 def draw_hills(args):
     """Ridges drawn on transparent, so the sky shows through above them."""
     im = new_layer(HILLS_H, 0)
-    ridge(im, [(1, 9, 0.0), (2, 5, 1.1), (3, 3, 2.3)], 26, 7)
-    ridge(im, [(1, 7, 2.0), (3, 4, 0.4), (5, 2, 1.7)], 44, 6)
-    ridge(im, [(2, 6, 1.0), (3, 3, 2.9), (7, 2, 0.2)], 60, 8)
+    ridge(im, [(1, 6, 0.0), (2, 3, 1.1), (3, 2, 2.3)], 34, 7)
+    ridge(im, [(1, 5, 2.0), (3, 3, 0.4), (5, 2, 1.7)], 50, 6)
+    ridge(im, [(2, 4, 1.0), (3, 2, 2.9), (7, 1, 0.2)], 64, 8)
     return im
 
 
@@ -162,7 +162,7 @@ def main():
     p.add_argument("--outdir", default="assets", help="where to write the GIFs")
     p.add_argument("--header", required=True, help="C header to write")
     p.add_argument("--name", default="stage", help="identifier prefix")
-    p.add_argument("--ground", type=int, default=184,
+    p.add_argument("--ground", type=int, default=168,
                    help="y of the ground line the character stands on")
     p.add_argument("--seed", type=int, default=7, help="scenery random seed")
     args = p.parse_args()

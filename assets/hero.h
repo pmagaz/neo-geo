@@ -2,26 +2,26 @@
 #ifndef HERO_H
 #define HERO_H
 
-#define HERO_TILES_W 5
-#define HERO_TILES_H 6
-#define HERO_SHEET_W 40
-#define HERO_TILE_COUNT 960
+#define HERO_TILES_W 4
+#define HERO_TILES_H 4
+#define HERO_SHEET_W 32
+#define HERO_TILE_COUNT 512
 
 #define HERO_WALK_FRAMES 8
 #define HERO_WALK_ROW 0
 #define HERO_ATTACK_FRAMES 8
-#define HERO_ATTACK_ROW 6
-#define HERO_JUMP_FRAMES 5
-#define HERO_JUMP_ROW 12
-#define HERO_CROUCH_FRAMES 3
-#define HERO_CROUCH_ROW 18
+#define HERO_ATTACK_ROW 4
+#define HERO_JUMP_FRAMES 4
+#define HERO_JUMP_ROW 8
+#define HERO_CROUCH_FRAMES 2
+#define HERO_CROUCH_ROW 12
 
 /* 16 colours, index 0 transparent. */
 static const u16 hero_palette[16] = {
-    0x8000, 0xcedc, 0xaaab, 0xcea8,
-    0x6c65, 0x5974, 0xe943, 0x5655,
-    0x2733, 0x0532, 0x2621, 0xc523,
-    0x7420, 0x4312, 0xf211, 0x8000,
+    0x8000, 0x1b98, 0xd778, 0xc667,
+    0x2645, 0x6446, 0x8445, 0xa523,
+    0xd333, 0x8334, 0x9322, 0x0223,
+    0x4112, 0x5000, 0x9000, 0x8000,
 };
 
 #endif
