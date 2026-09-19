@@ -102,18 +102,85 @@ static s16 hills_tile_scroll = -1;
 static s16 ground_tile_scroll = -1;
 
 
-static void init_palette(void) {
-    /* Palette 0 draws the fix layer (the text), 1 the character, 2 the stage. */
-    static const u16 text_palette[16] = {
-        0x8000, 0x0fff, 0x0666, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
-    };
+/* Defined with the rest of the frame handling, further down. */
+static void wait_vblank(void);
 
+
+/* Palette 0 draws the fix layer (the text), 1 the character, 2 the stage. */
+static const u16 text_palette[16] = {
+    0x8000, 0x0fff, 0x0666, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+
+/*
+ * Dim one colour to num/den of its brightness.
+ *
+ * A palette entry packs six bits per channel awkwardly: the top four bits of
+ * each are together in the low half of the word, each channel's next bit is in
+ * bits 14-12, and the lowest bit of all three is shared in bit 15 and stored
+ * inverted. So the channels have to be unpacked, scaled and packed again.
+ */
+static u16 dim_color(u16 c, u16 num, u16 den) {
+    u16 dark = ((c >> 15) & 1) ^ 1;
+    u16 r = (u16)((((c >> 8) & 0xf) << 2) | (((c >> 14) & 1) << 1) | dark);
+    u16 g = (u16)((((c >> 4) & 0xf) << 2) | (((c >> 13) & 1) << 1) | dark);
+    u16 b = (u16)(((c & 0xf) << 2) | (((c >> 12) & 1) << 1) | dark);
+
+    r = (u16)((u32)r * num / den);
+    g = (u16)((u32)g * num / den);
+    b = (u16)((u32)b * num / den);
+
+    u16 nd = (((r & 1) + (g & 1) + (b & 1)) >= 2) ? 1 : 0;
+    return (u16)(((nd ^ 1) << 15)
+                 | (((r >> 1) & 1) << 14) | (((g >> 1) & 1) << 13)
+                 | (((b >> 1) & 1) << 12)
+                 | (((r >> 2) & 0xf) << 8) | (((g >> 2) & 0xf) << 4)
+                 | ((b >> 2) & 0xf));
+}
+
+
+/// Write all three palettes at `level`/FADE_STEPS of their brightness.
+#define FADE_STEPS 9
+
+static void set_brightness(u16 level) {
     for (u16 i = 0; i < 16; i++) {
-        MMAP_PALBANK1[i] = text_palette[i];
-        MMAP_PALBANK1[16 + i] = hero_palette[i];
-        MMAP_PALBANK1[32 + i] = stage_palette[i];
+        MMAP_PALBANK1[i] = dim_color(text_palette[i], level, FADE_STEPS);
+        MMAP_PALBANK1[16 + i] = dim_color(hero_palette[i], level, FADE_STEPS);
+        MMAP_PALBANK1[32 + i] = dim_color(stage_palette[i], level, FADE_STEPS);
     }
+}
+
+
+/*
+ * Fade the screen, about 150 ms each way.
+ *
+ * This replaces an earlier attempt that scaled every sprite with the
+ * hardware's shrink. That grows the scene out of a point, but the hardware can
+ * only shrink and never grow past full size, so a full-screen image scaled
+ * down always leaves the screen's edges empty around it. A fade has nothing to
+ * leave empty, and it dims the text too, which no sprite effect can.
+ */
+static void fade_to_black(void) {
+    for (s16 l = FADE_STEPS; l >= 0; l--) {
+        set_brightness((u16)l);
+        wait_vblank();
+    }
+}
+
+static void fade_from_black(void) {
+    for (u16 l = 0; l <= FADE_STEPS; l++) {
+        set_brightness(l);
+        wait_vblank();
+    }
+}
+
+
+static void init_palette(void) {
+    set_brightness(FADE_STEPS);
+    /* The backdrop shows wherever no sprite is drawn: the last colour of the
+       bank. Black, so a screen with the stage hidden is plain black. */
+    MMAP_PALBANK1[4095] = 0x8000;
 }
 
 
@@ -427,6 +494,32 @@ static const u8 menu_row[MENU_ITEMS] = { 17, 19 };
 static const char *menu_label[MENU_ITEMS] = { "START", "QUIT" };
 
 
+/*
+ * Switch the stage off. A sprite whose height is zero is not drawn, so the
+ * screen falls back to the backdrop colour - black. The title screen wants a
+ * clean background rather than the game showing through behind it.
+ *
+ * The sky is a sticky chain and its followers inherit the leader's height, so
+ * only the leader needs changing; the scrolling layers each carry their own.
+ */
+static void show_stage(u8 visible) {
+    *REG_VRAMMOD = 0;
+
+    *REG_VRAMADDR = ADDR_SCB3 + SKY_SPRITE;
+    *REG_VRAMRW = (((496 - STAGE_SKY_Y) & 0x1ff) << 7)
+                  | (visible ? STAGE_SKY_ROWS : 0);
+
+    for (u16 i = 0; i <= STAGE_COLS; i++) {
+        *REG_VRAMADDR = ADDR_SCB3 + HILLS_SPRITE + i;
+        *REG_VRAMRW = (((496 - STAGE_HILLS_Y) & 0x1ff) << 7)
+                      | (visible ? STAGE_HILLS_ROWS : 0);
+        *REG_VRAMADDR = ADDR_SCB3 + GROUND_SPRITE + i;
+        *REG_VRAMRW = (((496 - STAGE_GROUND_Y) & 0x1ff) << 7)
+                      | (visible ? STAGE_GROUND_ROWS : 0);
+    }
+}
+
+
 /// A sprite with a height of zero is switched off, which is how the character
 /// is kept out of the way on the title screen.
 static void show_hero(u8 visible) {
@@ -461,10 +554,12 @@ static u8 title_screen(void) {
 
     ng_cls();
     show_hero(0);
+    show_stage(0);
     ng_center_text(8, 0, "T H E   W A N D E R E R");
     ng_center_text(11, 0, "A NEO GEO GAME");
     draw_menu(selected);
     ng_center_text(25, 0, "W S TO CHOOSE   ENTER OR J TO PICK");
+    fade_from_black();
 
     for (;;) {
         u8 pad = read_p1();
@@ -505,24 +600,35 @@ int main(void) {
     /* Put the sound driver in a known state before asking it for anything. */
     play_sound(SND_RESET);
 
+    /* Start from black so the first screen fades in like every other one. */
+    set_brightness(0);
+
     for (;;) {
         if (title_screen() == MENU_QUIT) {
+            fade_to_black();
+
             /* A cartridge has nowhere to quit to, so this is as far as it
                goes: say goodbye, then offer the title screen again. */
             ng_cls();
             show_hero(0);
+            show_stage(0);
             ng_center_text(13, 0, "THANKS FOR PLAYING");
-            for (u16 i = 0; i < 150; i++) {
+            fade_from_black();
+            for (u16 i = 0; i < 120; i++) {
                 wait_vblank();
             }
+            fade_to_black();
             continue;
         }
 
+        fade_to_black();
         play_sound(SND_COIN);
 
         ng_cls();
-        ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
         show_hero(1);
+        show_stage(1);
+        ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+        fade_from_black();
 
         for (;;) {
             update_hero();
