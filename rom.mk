@@ -27,3 +27,7 @@ MROM1=$(ROM)/$(GAMEROM)-m1.m1
 # sample ROM: ADPCM audio
 VROMSIZE=524288
 VROM1=$(ROM)/$(GAMEROM)-v1.v1
+# Defining this switches the build to packing the V ROM with vromtool from
+# assets/sound/samples-map.yaml. Without it the makefile would simply
+# concatenate the prerequisites, which would put the YAML in the ROM.
+VROMTEMPLATE=$(ROM)/$(GAMEROM)-vX.vX

@@ -1,9 +1,13 @@
 /*
- * Iteration 4: a character on a parallax stage that scrolls forever.
+ * A character on a parallax stage that scrolls forever, with a title screen.
  *
  * On the Neo Geo a sprite is a vertical strip of tiles, and there is no
  * background layer at all: the stage is sprites too, numbered below the
  * character because higher-numbered sprites are drawn in front.
+ *
+ * The 68000 cannot reach the sound chip either. It writes a command byte to
+ * REG_SOUND, the Z80 takes an NMI and plays the sample; src/user_commands.s
+ * is the other half of that conversation.
  */
 
 #include <ngdevkit/neogeo.h>
@@ -62,6 +66,17 @@
 /// The art faces right, so walking left is the mirrored one.
 #define FACING_RIGHT 0
 #define FACING_LEFT 1
+
+/* Sound commands. These must stay in step with the jump table in
+   src/user_commands.s; 0 to 3 are reserved by the sound driver. */
+#define SND_RESET 3
+#define SND_COIN 4
+#define SND_JUMP 5
+#define SND_PUNCH 6
+
+static inline void play_sound(u8 command) {
+    *REG_SOUND = command;
+}
 
 enum state {
     ST_IDLE,
@@ -265,6 +280,13 @@ static u8 read_p1(void) {
 }
 
 
+/// Player 1's Start button, which lives in a different register to the stick.
+/// Active low as well, so the same inversion applies.
+static u8 read_start(void) {
+    return (u8)~(*REG_STATUS_B) & CNT_START1;
+}
+
+
 /// Advance `frame`, stopping on the last one. Returns 1 when the end is reached.
 static u8 advance_once(u8 frames, u8 rate) {
     if (frame + 1 >= frames) {
@@ -325,10 +347,12 @@ static void update_hero(void) {
         }
     } else if (pressed & CNT_A) {
         set_state(ST_ATTACK);
+        play_sound(SND_PUNCH);
     } else if (pressed & CNT_UP) {
         set_state(ST_JUMP);
         hero_vy = JUMP_SPEED;
         frame = 1;
+        play_sound(SND_JUMP);
     } else if (pad & CNT_DOWN) {
         set_state(ST_CROUCH);
         advance_once(HERO_CROUCH_FRAMES, CROUCH_RATE);
@@ -387,6 +411,83 @@ static void wait_vblank(void) {
 }
 
 
+/*
+ * The title screen.
+ *
+ * The stage stays on screen behind it - it costs nothing, since those sprites
+ * are already set up, and an empty parallax backdrop makes a better title card
+ * than a black screen. Only the character is hidden.
+ */
+
+#define MENU_START 0
+#define MENU_QUIT 1
+#define MENU_ITEMS 2
+
+static const u8 menu_row[MENU_ITEMS] = { 17, 19 };
+static const char *menu_label[MENU_ITEMS] = { "START", "QUIT" };
+
+
+/// A sprite with a height of zero is switched off, which is how the character
+/// is kept out of the way on the title screen.
+static void show_hero(u8 visible) {
+    *REG_VRAMMOD = 0;
+    *REG_VRAMADDR = ADDR_SCB3 + FIRST_SPRITE;
+    *REG_VRAMRW = (((496 - hero_y) & 0x1ff) << 7) | (visible ? HERO_TILES_H : 0);
+}
+
+
+static void draw_menu(u8 selected) {
+    for (u8 i = 0; i < MENU_ITEMS; i++) {
+        /* The cursor is part of the string so that clearing it needs no
+           separate erase: the same width is always written. */
+        char line[16];
+        const char *label = menu_label[i];
+        u8 n = 0;
+        line[n++] = (i == selected) ? '>' : ' ';
+        line[n++] = ' ';
+        while (*label) { line[n++] = *label++; }
+        line[n++] = ' ';
+        line[n++] = (i == selected) ? '<' : ' ';
+        line[n] = '\0';
+        ng_center_text(menu_row[i], 0, line);
+    }
+}
+
+
+/// Runs the title screen until the player picks something. Returns the choice.
+static u8 title_screen(void) {
+    u8 selected = MENU_START;
+    u8 prev_start = 0;
+
+    ng_cls();
+    show_hero(0);
+    ng_center_text(8, 0, "T H E   W A N D E R E R");
+    ng_center_text(11, 0, "A NEO GEO GAME");
+    draw_menu(selected);
+    ng_center_text(25, 0, "W S TO CHOOSE   ENTER OR J TO PICK");
+
+    for (;;) {
+        u8 pad = read_p1();
+        u8 pressed = pad & ~prev_pad;
+        prev_pad = pad;
+
+        if (pressed & (CNT_UP | CNT_DOWN)) {
+            selected = (selected + 1) % MENU_ITEMS;   /* only two entries */
+            draw_menu(selected);
+        }
+        u8 start = read_start();
+        u8 start_pressed = start & ~prev_start;
+        prev_start = start;
+
+        if ((pressed & (CNT_A | CNT_B | CNT_C | CNT_D)) || start_pressed) {
+            return selected;
+        }
+
+        wait_vblank();
+    }
+}
+
+
 int main(void) {
     ng_cls();
     init_palette();
@@ -395,19 +496,47 @@ int main(void) {
     init_scrolling_layer(GROUND_SPRITE, STAGE_GROUND_ROWS, STAGE_GROUND_Y);
     init_hero();
 
-    ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+    /* Lay the scrolling layers out once before anything is drawn. Their
+       columns only get an X when they are scrolled, and until then they would
+       all sit stacked at the left edge. */
+    scroll_layer(HILLS_SPRITE, HILLS_TILE, STAGE_HILLS_ROWS, 0, &hills_tile_scroll);
+    scroll_layer(GROUND_SPRITE, GROUND_TILE, STAGE_GROUND_ROWS, 0, &ground_tile_scroll);
+
+    /* Put the sound driver in a known state before asking it for anything. */
+    play_sound(SND_RESET);
 
     for (;;) {
-        update_hero();
+        if (title_screen() == MENU_QUIT) {
+            /* A cartridge has nowhere to quit to, so this is as far as it
+               goes: say goodbye, then offer the title screen again. */
+            ng_cls();
+            show_hero(0);
+            ng_center_text(13, 0, "THANKS FOR PLAYING");
+            for (u16 i = 0; i < 150; i++) {
+                wait_vblank();
+            }
+            continue;
+        }
 
-        /* The far hills move at a quarter of the floor's speed, which is what
-           makes them read as distant. */
-        scroll_layer(HILLS_SPRITE, HILLS_TILE, STAGE_HILLS_ROWS,
-                     camera_x >> 2, &hills_tile_scroll);
-        scroll_layer(GROUND_SPRITE, GROUND_TILE, STAGE_GROUND_ROWS,
-                     camera_x, &ground_tile_scroll);
+        play_sound(SND_COIN);
 
-        wait_vblank();
+        ng_cls();
+        ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+        show_hero(1);
+
+        for (;;) {
+            update_hero();
+
+            /* The far hills move at a quarter of the floor's speed, which is
+               what makes them read as distant. */
+            scroll_layer(HILLS_SPRITE, HILLS_TILE, STAGE_HILLS_ROWS,
+                         camera_x >> 2, &hills_tile_scroll);
+            scroll_layer(GROUND_SPRITE, GROUND_TILE, STAGE_GROUND_ROWS,
+                         camera_x, &ground_tile_scroll);
+
+
+            wait_vblank();
+        }
     }
     return 0;
 }

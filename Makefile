@@ -5,8 +5,8 @@ all: cart bios
 # location of generated and compiled content
 BUILDDIR=build
 # directories scanned for source to compile
-SRCDIRS=assets
-CFLAGS=-I$(BUILDDIR) -Iassets -std=c99 -fomit-frame-pointer -O2 -g
+SRCDIRS=assets src
+CFLAGS=-I$(BUILDDIR) -Iassets/images/sprites -Iassets/images/stages -std=c99 -fomit-frame-pointer -O2 -g
 LDFLAGS=
 Z80FLAGS=
 Z80LDFLAGS=
@@ -50,18 +50,18 @@ $(SROM1): $(BUILDDIR)/assets/base-srom-text-shadow.fix
 # The hero's animations land at tile 256.
 $(CROM1): $(BUILDDIR)/assets/base-crom-logo.c1
 $(CROM2): $(BUILDDIR)/assets/base-crom-logo.c2
-$(CROM1): $(BUILDDIR)/assets/hero.c1
-$(CROM2): $(BUILDDIR)/assets/hero.c2
-$(CROM1): $(BUILDDIR)/assets/stage-sky.c1
-$(CROM2): $(BUILDDIR)/assets/stage-sky.c2
-$(CROM1): $(BUILDDIR)/assets/stage-hills.c1
-$(CROM2): $(BUILDDIR)/assets/stage-hills.c2
-$(CROM1): $(BUILDDIR)/assets/stage-ground.c1
-$(CROM2): $(BUILDDIR)/assets/stage-ground.c2
+$(CROM1): $(BUILDDIR)/assets/images/sprites/hero.c1
+$(CROM2): $(BUILDDIR)/assets/images/sprites/hero.c2
+$(CROM1): $(BUILDDIR)/assets/images/stages/stage-sky.c1
+$(CROM2): $(BUILDDIR)/assets/images/stages/stage-sky.c2
+$(CROM1): $(BUILDDIR)/assets/images/stages/stage-hills.c1
+$(CROM2): $(BUILDDIR)/assets/images/stages/stage-hills.c2
+$(CROM1): $(BUILDDIR)/assets/images/stages/stage-ground.c1
+$(CROM2): $(BUILDDIR)/assets/images/stages/stage-ground.c2
 
 # Regenerate the tile sheet and its palette from the source art. Every
 # animation shares one palette, so they must be converted in one go.
-SHEET=assets/dfbf14334572aaf4dccdf18cf2a1a234.png
+SHEET=assets/images/sprites/hero-sheet.png
 PREPPED=$(BUILDDIR)/assets/hero-sheet.png
 
 # The sheet arrives as a JPEG with the transparency checkerboard painted into
@@ -70,28 +70,53 @@ PREPPED=$(BUILDDIR)/assets/hero-sheet.png
 $(PREPPED): $(SHEET) tools/prep_sheet.py Makefile | $(BUILDDIR)/assets
 	$(PYTHON) tools/prep_sheet.py $(SHEET) -o $@ --height 64
 
-assets/hero.gif assets/hero.h: $(PREPPED) tools/sheet2neo.py tools/neogeo_color.py
+assets/images/sprites/hero.gif assets/images/sprites/hero.h: $(PREPPED) tools/sheet2neo.py tools/neogeo_color.py
 	PYTHONPATH=tools $(PYTHON) tools/sheet2neo.py $(PREPPED) \
-	    -o assets/hero.gif --header assets/hero.h --name hero \
+	    -o assets/images/sprites/hero.gif \
+	    --header assets/images/sprites/hero.h --name hero \
 	    --anim walk:1 --anim attack:2 --anim jump:4:4-8 --anim crouch:5:2-4
 
 # The stage is drawn rather than converted, since the Neo Geo has no
 # background layer and it has to be built from sprite tiles anyway.
-STAGE_LAYERS=assets/stage-sky.gif assets/stage-hills.gif assets/stage-ground.gif
-$(STAGE_LAYERS) assets/stage.h: tools/make_stage.py tools/neogeo_color.py
+STAGE_LAYERS=$(addprefix assets/images/stages/,stage-sky.gif stage-hills.gif stage-ground.gif)
+$(STAGE_LAYERS) assets/images/stages/stage.h: tools/make_stage.py tools/neogeo_color.py
 	PYTHONPATH=tools $(PYTHON) tools/make_stage.py \
-	    --outdir assets --header assets/stage.h --name stage
+	    --outdir assets/images/stages \
+	    --header assets/images/stages/stage.h --name stage
 
-$(BUILDDIR)/main.o: assets/hero.h assets/stage.h
+$(BUILDDIR)/main.o: assets/images/sprites/hero.h assets/images/stages/stage.h
 
 
-# sound driver ROM: ngdevkit's stock driver, enough to satisfy the BIOS ---
-SOUND_DRIVER=$(BUILDDIR)/assets/base-sound-driver.ihx
+# sound driver ROM: the Z80 program ---------------------------------------
+#
+# The 68000 cannot reach the sound chip. It writes a command byte to
+# REG_SOUND, which fires an NMI on the Z80, and the Z80 plays the sample.
+# src/user_commands.s is the table of what each command number means.
+SOUND_DRIVER=$(BUILDDIR)/game-sound-driver.ihx
 $(MROM1): $(SOUND_DRIVER)
+$(SOUND_DRIVER): $(BUILDDIR)/src/user_commands.rel
 
 
-# sample ROM: no audio samples yet, so the V ROM stays empty --------------
+# sample ROM: the ADPCM-A sound effects ------------------------------------
+#
+# The YM2610's ADPCM-A channels run at a fixed 18.5 kHz, so the sources are
+# resampled to that and made mono. The silence filters trim the dead air at
+# each end - generously at the tail, so a sound's decay is not clipped off.
+SFX=coin-pickup jump punch
+SFXWAV=$(SFX:%=$(BUILDDIR)/assets/sfx/%.wav)
+
+$(BUILDDIR)/assets/sfx/%.wav: assets/sound/%.mp3 | $(BUILDDIR)/assets
+	mkdir -p $(dir $@)
+	$(SOX) -V1 $< -c 1 -r 18500 $@ \
+	    silence 1 0.01 0.1% reverse silence 1 0.15 0.03% reverse
+
+$(VROM1): assets/sound/samples-map.yaml
 
 
-# assets/square.gif is committed, so nothing to pre-generate here.
-CUSTOM_GENERATE_TARGETS=
+# Sample offsets have to exist before the Z80 source is assembled, so they
+# are generated in the "generate" pass that runs ahead of the build proper.
+CUSTOM_GENERATE_TARGETS=generate-sfx
+generate-sfx: $(BUILDDIR)/assets/samples.inc
+
+$(BUILDDIR)/assets/samples.inc: assets/sound/samples-map.yaml $(SFXWAV)
+	$(VROMTOOL) --asm -s $(VROMSIZE) $< -o $(VROM1) -m $@

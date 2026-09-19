@@ -1,0 +1,18 @@
+# Where each sound effect lives in the sample ROM.
+#
+# vromtool reads this, packs the samples into the V ROM and generates
+# assets/samples.inc with each one's start and stop offset, which the Z80
+# sound driver in src/user_commands.s refers to by name.
+#
+# The WAVs are built from assets/sound/*.mp3 by the makefile: mono at
+# 18.5 kHz, because that is the fixed rate of the YM2610's ADPCM-A channels.
+
+- adpcm_a:
+    name: coin
+    uri: file://build/assets/sfx/coin-pickup.wav
+- adpcm_a:
+    name: jump
+    uri: file://build/assets/sfx/jump.wav
+- adpcm_a:
+    name: punch
+    uri: file://build/assets/sfx/punch.wav
