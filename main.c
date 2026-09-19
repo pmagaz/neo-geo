@@ -337,6 +337,57 @@ static void init_hero(void) {
 
 
 /*
+ * Grow the character out of nothing, feet planted on the floor.
+ *
+ * Only the character is scaled - the stage behind it stays full size. That is
+ * the whole trick: the hardware can shrink a sprite but never grow one past
+ * its real size, so scaling the entire screen always leaves the edges empty
+ * around it. Scaling one sprite against a full-size background has nothing to
+ * leave empty.
+ *
+ * `scale` runs 0 to 256, where 256 is full size.
+ */
+static void hero_scale(u16 scale) {
+    u16 hs = (scale >> 4) ? (scale >> 4) - 1 : 0;       /* column width - 1 */
+    u16 vs = (scale > 0) ? scale - 1 : 0;
+    if (hs > 15) { hs = 15; }
+    if (vs > 255) { vs = 255; }
+
+    /* Keep it centred where it stands, and standing on the floor rather than
+       hanging in the air, so it grows up out of the ground. */
+    s16 width = (s16)(HERO_TILES_W * (hs + 1));
+    s16 left = (hero_world_x - camera_x) + (CHAR_W - width) / 2;
+    s16 drawn_h = (s16)(((s32)CHAR_H * (vs + 1)) / 256);
+    s16 top = STAGE_FLOOR_Y - drawn_h;
+
+    for (u16 i = 0; i < HERO_TILES_W; i++) {
+        *REG_VRAMMOD = 0;
+        *REG_VRAMADDR = ADDR_SCB2 + FIRST_SPRITE + i;
+        *REG_VRAMRW = (hs << 8) | vs;
+    }
+
+    /* Only the leader is placed: the rest of the chain follows it, and each
+       one sits at the previous sprite's drawn width, so the chain closes up
+       by itself as it shrinks. */
+    *REG_VRAMADDR = ADDR_SCB3 + FIRST_SPRITE;
+    *REG_VRAMRW = (((496 - top) & 0x1ff) << 7) | HERO_TILES_H;
+    *REG_VRAMADDR = ADDR_SCB4 + FIRST_SPRITE;
+    *REG_VRAMRW = (left & 0x1ff) << 7;
+}
+
+
+/// Put the character back to full size, the way the game loop expects it.
+static void hero_scale_reset(void) {
+    for (u16 i = 0; i < HERO_TILES_W; i++) {
+        *REG_VRAMMOD = 0;
+        *REG_VRAMADDR = ADDR_SCB2 + FIRST_SPRITE + i;
+        *REG_VRAMRW = 0xfff;
+    }
+    move_hero_to(hero_world_x - camera_x, hero_y);
+}
+
+
+/*
  * Read player 1's joystick straight from the hardware.
  *
  * REG_P1CNT is active low - a bit reads 0 while its switch is held - so invert
@@ -625,10 +676,27 @@ int main(void) {
         play_sound(SND_COIN);
 
         ng_cls();
-        show_hero(1);
         show_stage(1);
         ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+
+        /* Draw the character where it will actually stand before anything is
+           shown. Without this it sits at x=0 for the whole fade and then jumps
+           to the middle on the first frame of play. */
+        set_frame(HERO_WALK_ROW, 0, facing);
+        show_hero(1);
+        hero_scale(1);          /* start as a speck */
+
         fade_from_black();
+
+        /* Then grow it out of the floor: 18 frames, about 300 ms. Squared, so
+           it starts slowly and rushes at the end. */
+        for (u16 f = 1; f <= 18; f++) {
+            u16 t = (u16)((u32)f * 256 / 18);
+            u16 sc = (u16)((u32)t * t / 256);
+            hero_scale(sc ? sc : 1);
+            wait_vblank();
+        }
+        hero_scale_reset();
 
         for (;;) {
             update_hero();
