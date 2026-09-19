@@ -108,9 +108,9 @@ static void wait_vblank(void);
 
 /* Palette 0 draws the fix layer (the text), 1 the character, 2 the stage. */
 static const u16 text_palette[16] = {
-    0x8000, 0x0fff, 0x0666, 0, 0, 0, 0, 0,
+    0x8000, 0x0fff, 0x0666, 0x8000, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0,
-};
+};      /*                  ^ colour 3: black, what the transition paints */
 
 
 /*
@@ -149,6 +149,79 @@ static void set_brightness(u16 level) {
         MMAP_PALBANK1[16 + i] = dim_color(hero_palette[i], level, FADE_STEPS);
         MMAP_PALBANK1[32 + i] = dim_color(stage_palette[i], level, FADE_STEPS);
     }
+}
+
+
+/*
+ * Screen transition: a block dissolve.
+ *
+ * The fix layer is a 40x32 grid of 8x8 tiles drawn on top of every sprite, so
+ * filling its cells with a solid tile hides the screen and clearing them
+ * reveals it again a block at a time. 8x8 is as fine as this gets - the fix
+ * grid is the hardware's, and nothing smaller exists.
+ *
+ * Each cell is given a pseudo-random step at which it flips, so the screen
+ * breaks up in a scatter rather than a sweep. One step per frame, so the whole
+ * thing takes DISSOLVE_STEPS frames, and each frame only touches the cells
+ * belonging to that step.
+ *
+ * The fix layer also holds the text, so a dissolve wipes any text with it.
+ * Screens therefore reveal first and draw their text afterwards.
+ */
+#define FIX_MAP 0x7000
+#define FIX_COLS 40
+#define FIX_ROWS 32
+#define SOLID_TILE 1280                 /* straight after ngdevkit's font */
+#define EMPTY_TILE 255                  /* transparent */
+#define BLOCK_PALETTE 0                 /* colour 3 of it is black */
+#define DISSOLVE_STEPS 16
+
+/// Which step a cell flips on. Deliberately scrambled, not a sweep.
+static u8 cell_step(u16 col, u16 row) {
+    u16 h = (u16)(col * 37u + row * 101u + ((col ^ row) << 3));
+    h ^= (u16)(h >> 5);
+    return (u8)(h % DISSOLVE_STEPS);
+}
+
+static void fix_put(u16 col, u16 row, u16 entry) {
+    *REG_VRAMADDR = FIX_MAP + col * 32 + row;
+    *REG_VRAMRW = entry;
+}
+
+/// Cover every cell at once, with no animation.
+static void cover_screen(void) {
+    *REG_VRAMMOD = 1;
+    for (u16 col = 0; col < FIX_COLS; col++) {
+        *REG_VRAMADDR = FIX_MAP + col * 32;
+        for (u16 row = 0; row < FIX_ROWS; row++) {
+            *REG_VRAMRW = (BLOCK_PALETTE << 12) | SOLID_TILE;
+        }
+    }
+}
+
+/// Flip every cell to `entry`, a step per frame, scattered.
+static void dissolve(u16 entry) {
+    for (u8 step = 0; step < DISSOLVE_STEPS; step++) {
+        *REG_VRAMMOD = 0;
+        for (u16 col = 0; col < FIX_COLS; col++) {
+            for (u16 row = 0; row < FIX_ROWS; row++) {
+                if (cell_step(col, row) == step) {
+                    fix_put(col, row, entry);
+                }
+            }
+        }
+        wait_vblank();
+    }
+}
+
+/// Break the screen up into blocks until it is covered.
+static void dissolve_out(void) {
+    dissolve((BLOCK_PALETTE << 12) | SOLID_TILE);
+}
+
+/// Clear the blocks away to reveal whatever the sprites are showing.
+static void dissolve_in(void) {
+    dissolve((BLOCK_PALETTE << 12) | EMPTY_TILE);
 }
 
 
@@ -333,57 +406,6 @@ static void init_hero(void) {
             *REG_VRAMRW = 1 << 6;           /* sticky: follow the previous one */
         }
     }
-}
-
-
-/*
- * Grow the character out of nothing, feet planted on the floor.
- *
- * Only the character is scaled - the stage behind it stays full size. That is
- * the whole trick: the hardware can shrink a sprite but never grow one past
- * its real size, so scaling the entire screen always leaves the edges empty
- * around it. Scaling one sprite against a full-size background has nothing to
- * leave empty.
- *
- * `scale` runs 0 to 256, where 256 is full size.
- */
-static void hero_scale(u16 scale) {
-    u16 hs = (scale >> 4) ? (scale >> 4) - 1 : 0;       /* column width - 1 */
-    u16 vs = (scale > 0) ? scale - 1 : 0;
-    if (hs > 15) { hs = 15; }
-    if (vs > 255) { vs = 255; }
-
-    /* Keep it centred where it stands, and standing on the floor rather than
-       hanging in the air, so it grows up out of the ground. */
-    s16 width = (s16)(HERO_TILES_W * (hs + 1));
-    s16 left = (hero_world_x - camera_x) + (CHAR_W - width) / 2;
-    s16 drawn_h = (s16)(((s32)CHAR_H * (vs + 1)) / 256);
-    s16 top = STAGE_FLOOR_Y - drawn_h;
-
-    for (u16 i = 0; i < HERO_TILES_W; i++) {
-        *REG_VRAMMOD = 0;
-        *REG_VRAMADDR = ADDR_SCB2 + FIRST_SPRITE + i;
-        *REG_VRAMRW = (hs << 8) | vs;
-    }
-
-    /* Only the leader is placed: the rest of the chain follows it, and each
-       one sits at the previous sprite's drawn width, so the chain closes up
-       by itself as it shrinks. */
-    *REG_VRAMADDR = ADDR_SCB3 + FIRST_SPRITE;
-    *REG_VRAMRW = (((496 - top) & 0x1ff) << 7) | HERO_TILES_H;
-    *REG_VRAMADDR = ADDR_SCB4 + FIRST_SPRITE;
-    *REG_VRAMRW = (left & 0x1ff) << 7;
-}
-
-
-/// Put the character back to full size, the way the game loop expects it.
-static void hero_scale_reset(void) {
-    for (u16 i = 0; i < HERO_TILES_W; i++) {
-        *REG_VRAMMOD = 0;
-        *REG_VRAMADDR = ADDR_SCB2 + FIRST_SPRITE + i;
-        *REG_VRAMRW = 0xfff;
-    }
-    move_hero_to(hero_world_x - camera_x, hero_y);
 }
 
 
@@ -604,13 +626,17 @@ static u8 title_screen(void) {
     u8 prev_start = 0;
 
     ng_cls();
+    cover_screen();
     show_hero(0);
     show_stage(0);
+    dissolve_in();
+
+    /* Text goes on after the dissolve: it lives in the same fix layer the
+       dissolve paints over, so anything drawn first would be wiped. */
     ng_center_text(8, 0, "T H E   W A N D E R E R");
     ng_center_text(11, 0, "A NEO GEO GAME");
     draw_menu(selected);
     ng_center_text(25, 0, "W S TO CHOOSE   ENTER OR J TO PICK");
-    fade_from_black();
 
     for (;;) {
         u8 pad = read_p1();
@@ -651,52 +677,45 @@ int main(void) {
     /* Put the sound driver in a known state before asking it for anything. */
     play_sound(SND_RESET);
 
-    /* Start from black so the first screen fades in like every other one. */
-    set_brightness(0);
+    /* Start covered, so the first screen reveals like every other one. */
+    cover_screen();
 
     for (;;) {
         if (title_screen() == MENU_QUIT) {
-            fade_to_black();
+            dissolve_out();
 
             /* A cartridge has nowhere to quit to, so this is as far as it
                goes: say goodbye, then offer the title screen again. */
             ng_cls();
+            cover_screen();
             show_hero(0);
             show_stage(0);
+            dissolve_in();
             ng_center_text(13, 0, "THANKS FOR PLAYING");
-            fade_from_black();
             for (u16 i = 0; i < 120; i++) {
                 wait_vblank();
             }
-            fade_to_black();
+            dissolve_out();
             continue;
         }
 
-        fade_to_black();
+        dissolve_out();
         play_sound(SND_COIN);
 
         ng_cls();
+        cover_screen();
         show_stage(1);
-        ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
 
         /* Draw the character where it will actually stand before anything is
            shown. Without this it sits at x=0 for the whole fade and then jumps
            to the middle on the first frame of play. */
         set_frame(HERO_WALK_ROW, 0, facing);
+        move_hero_to(hero_world_x - camera_x, hero_y);
         show_hero(1);
-        hero_scale(1);          /* start as a speck */
 
-        fade_from_black();
+        dissolve_in();
+        ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
 
-        /* Then grow it out of the floor: 18 frames, about 300 ms. Squared, so
-           it starts slowly and rushes at the end. */
-        for (u16 f = 1; f <= 18; f++) {
-            u16 t = (u16)((u32)f * 256 / 18);
-            u16 sc = (u16)((u32)t * t / 256);
-            hero_scale(sc ? sc : 1);
-            wait_vblank();
-        }
-        hero_scale_reset();
 
         for (;;) {
             update_hero();

@@ -69,8 +69,14 @@ $(ELF): $(BUILDDIR)/main.o
 $(PROM1): $(ELF)
 
 
-# fix ROM: the 8x8 text tiles ngdevkit provides ---------------------------
+# fix ROM: ngdevkit's 8x8 text tiles, then our own ------------------------
+# The font occupies tiles 0-1279, so the solid block the screen transition
+# paints with lands at 1280. main.c has that number as SOLID_TILE.
 $(SROM1): $(BUILDDIR)/assets/base-srom-text-shadow.fix
+$(SROM1): $(BUILDDIR)/assets/images/fix/solid.fix
+
+assets/images/fix/solid.gif: tools/make_fixtile.py
+	$(PYTHON) tools/make_fixtile.py -o $@
 
 
 # sprite ROM: BIOS eye-catcher tiles (0-255), then our own ----------------
