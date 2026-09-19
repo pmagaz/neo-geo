@@ -96,6 +96,12 @@ SOUND_DRIVER=$(BUILDDIR)/game-sound-driver.ihx
 $(MROM1): $(SOUND_DRIVER)
 $(SOUND_DRIVER): $(BUILDDIR)/src/user_commands.rel
 
+# The assembler does not create its own output directory, and that directory
+# is otherwise only made during the "generate" pass - which a build/ left over
+# from a checkout that predates src/ has already recorded as done. Without
+# this, such a tree fails with "cannot create build/src/user_commands.lst".
+$(BUILDDIR)/src/user_commands.rel: | $(BUILDDIR)/src
+
 
 # sample ROM: the ADPCM-A sound effects ------------------------------------
 #
