@@ -14,6 +14,33 @@ Z80LDFLAGS=
 # paths to the ngdevkit toolchain on this machine
 include config.mk
 
+# Mirror the source tree's directories into build/ every time make runs.
+#
+# None of the compilers create their own output directory, and the directories
+# are otherwise made by a one-shot pass that records itself as done - so a
+# build/ carried over from an earlier layout is missing whatever was added
+# since, and the build fails with "cannot create" or "No such file or
+# directory" somewhere far from the cause. This has now happened three times:
+# when src/ was added, and when the assets were split into images/sprites and
+# images/stages. Doing it at parse time costs a few milliseconds and cannot go
+# stale, whatever state build/ is in and whatever directories are added later.
+BUILD_DIRS := $(BUILDDIR) $(BUILDDIR)/rom $(BUILDDIR)/assets/sfx \
+              $(patsubst %,$(BUILDDIR)/%,$(shell find assets src -type d 2>/dev/null))
+$(shell mkdir -p $(BUILD_DIRS))
+
+# The same pass also copies in ngdevkit's own assets - the font tiles and the
+# eye-catcher the BIOS needs. It writes a marker when it finishes and is
+# skipped ever after, so if those files are removed while the marker survives,
+# make has no rule left that produces them and stops. Dropping the marker when
+# any of them is missing makes the pass run again.
+BASE_ASSETS := $(BUILDDIR)/assets/base-crom-logo.c1 \
+               $(BUILDDIR)/assets/base-crom-logo.c2 \
+               $(BUILDDIR)/assets/base-srom-text-shadow.fix \
+               $(BUILDDIR)/assets/base-sound-driver.ihx
+$(shell for f in $(BASE_ASSETS); do \
+            [ -f "$$f" ] || { rm -f $(BUILDDIR)/.generated; break; }; \
+        done)
+
 # cartridge layout
 GAMEROM=square
 GAMETITLE=Moving square
@@ -96,14 +123,10 @@ SOUND_DRIVER=$(BUILDDIR)/game-sound-driver.ihx
 $(MROM1): $(SOUND_DRIVER)
 $(SOUND_DRIVER): $(BUILDDIR)/src/user_commands.rel
 
-# Both of these exist because the "generate" pass runs once and records that
-# it is done, so a build/ carried over from an older checkout never produces
-# them again. Depending on them directly makes the build correct whatever
-# state build/ is in:
-#
-#   the directory, or the assembler cannot write its listing file
-#   samples.inc, or the .include on line 44 of user_commands.s fails
-$(BUILDDIR)/src/user_commands.rel: $(BUILDDIR)/assets/samples.inc | $(BUILDDIR)/src
+# user_commands.s includes the generated sample offsets, so they must exist
+# before it is assembled. The "generate" pass produces them, but only runs
+# once per build tree, so name the file directly rather than trust the pass.
+$(BUILDDIR)/src/user_commands.rel: $(BUILDDIR)/assets/samples.inc
 
 
 # sample ROM: the ADPCM-A sound effects ------------------------------------
@@ -114,8 +137,7 @@ $(BUILDDIR)/src/user_commands.rel: $(BUILDDIR)/assets/samples.inc | $(BUILDDIR)/
 SFX=coin-pickup jump punch
 SFXWAV=$(SFX:%=$(BUILDDIR)/assets/sfx/%.wav)
 
-$(BUILDDIR)/assets/sfx/%.wav: assets/sound/%.mp3 | $(BUILDDIR)/assets
-	mkdir -p $(dir $@)
+$(BUILDDIR)/assets/sfx/%.wav: assets/sound/%.mp3
 	"$(SOX)" -V1 $< -c 1 -r 18500 $@ \
 	    silence 1 0.01 0.1% reverse silence 1 0.15 0.03% reverse
 
