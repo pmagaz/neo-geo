@@ -104,13 +104,18 @@ ifeq ($(HERO),new)
 # so they are sampled down and laid out as a sheet. No scaling: this art is
 # used at the size it was drawn. There is no crouch art, and the jump borrows
 # mid-stride frames from the run as a stand-in.
+#
+# The tolerance is tuned to this art. Its backdrop is (91,112,117); the ground
+# shadow drawn under the character sits 45 away from that per channel and the
+# nearest colour the character itself uses is 50, so 46 takes the shadow and
+# leaves the character whole.
 # Listed rather than globbed: one of the files in there has spaces in
 # its name, which make cannot carry through a prerequisite list.
 NEWGIFS=assets/new/runing.gif assets/new/attack.gif
 PREPPED=$(BUILDDIR)/assets/hero-sheet-$(HERO).png
 
 $(PREPPED): $(NEWGIFS) tools/gifs2sheet.py Makefile | $(BUILDDIR)/assets
-	$(PYTHON) tools/gifs2sheet.py -o $@ \
+	$(PYTHON) tools/gifs2sheet.py -o $@ --bg-tolerance 46 \
 	    --anim "walk=assets/new/runing.gif:2-43:8" \
 	    --anim "attack=assets/new/attack.gif:1-26:8" \
 	    --anim "jump=assets/new/runing.gif:4-12:4"

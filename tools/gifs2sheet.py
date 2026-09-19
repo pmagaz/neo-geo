@@ -37,8 +37,16 @@ def key_background(im, tolerance):
     bg = px[0, 0][:3]
 
     def matches(p):
-        return (abs(p[0] - bg[0]) + abs(p[1] - bg[1])
-                + abs(p[2] - bg[2])) <= tolerance * 3
+        # Every channel has to be close, not the total.
+        #
+        # Summing the differences makes unrelated colours look near: this
+        # character's skin is (174,135,102) against a (91,112,117) backdrop,
+        # which sums to only 121 - so a summed tolerance of 48 swallowed every
+        # face, arm and leg while leaving the clothes behind. Per channel the
+        # same pair is 83 apart and never matches.
+        return (abs(p[0] - bg[0]) <= tolerance
+                and abs(p[1] - bg[1]) <= tolerance
+                and abs(p[2] - bg[2]) <= tolerance)
 
     seen = bytearray(w * h)
     stack = [(x, 0) for x in range(w)] + [(x, h - 1) for x in range(w)]
@@ -107,9 +115,9 @@ def main():
     p.add_argument("-o", "--output", required=True, help="PNG sheet to write")
     p.add_argument("--anim", action="append", default=[], required=True,
                    metavar="NAME=FILE[:A-B]:COUNT", help="repeatable")
-    p.add_argument("--bg-tolerance", type=int, default=48,
-                   help="how far a pixel may differ from the corner colour "
-                        "and still count as backdrop; -1 keeps it")
+    p.add_argument("--bg-tolerance", type=int, default=24,
+                   help="how far each channel may differ from the corner "
+                        "colour and still count as backdrop; -1 keeps it")
     args = p.parse_args()
 
     rows = []
