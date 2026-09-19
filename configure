@@ -20,6 +20,11 @@ PKGCONFIG=$(need pkg-config "brew install pkg-config")
 need m68k-neogeo-elf-gcc "brew tap dciabrin/ngdevkit && brew install ngdevkit" >/dev/null
 need gmake "brew install make" >/dev/null
 need magick "brew install imagemagick" >/dev/null
+# sox converts the sound effects to the rate the ADPCM chip needs. Without it
+# the build used to carry on and fail much later, inside vromtool.
+need sox "brew install sox" >/dev/null
+need zip "brew install zip" >/dev/null
+need z80-neogeo-ihx-sdasz80 "brew install ngdevkit" >/dev/null
 
 PYTHON=$(need python3 "brew install python3")
 NGBIN=$(dirname "$(command -v tiletool.py)")

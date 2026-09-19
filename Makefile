@@ -116,7 +116,7 @@ SFXWAV=$(SFX:%=$(BUILDDIR)/assets/sfx/%.wav)
 
 $(BUILDDIR)/assets/sfx/%.wav: assets/sound/%.mp3 | $(BUILDDIR)/assets
 	mkdir -p $(dir $@)
-	$(SOX) -V1 $< -c 1 -r 18500 $@ \
+	"$(SOX)" -V1 $< -c 1 -r 18500 $@ \
 	    silence 1 0.01 0.1% reverse silence 1 0.15 0.03% reverse
 
 $(VROM1): assets/sound/samples-map.yaml

@@ -3,27 +3,33 @@
 A Neo Geo AES/MVS cartridge game, built from source with
 [ngdevkit](https://github.com/dciabrin/ngdevkit).
 
-**Iteration 1:** a square you move with the joystick.
+A title screen, a character who walks, jumps, crouches and attacks, a
+three-layer parallax stage that scrolls endlessly, and sound.
 
-## Requirements
+## Install
 
-Everything comes from Homebrew. No copyrighted ROMs are needed — ngdevkit ships
-an open source BIOS, and the build copies it next to the cartridge for you.
+Once per machine. Everything comes from Homebrew, and no copyrighted ROMs are
+needed: ngdevkit ships an open source BIOS, which the build copies next to the
+cartridge for you.
 
 ```sh
-brew tap dciabrin/ngdevkit
-brew trust dciabrin/ngdevkit        # newer Homebrew requires this
-brew install ngdevkit ngdevkit-gngeo
-brew install make pkg-config imagemagick sox rsync zip
+./install.sh            # install what is missing, then write config.mk
+./install.sh --check    # report what is missing, change nothing
 ```
 
 ## Build and run
 
 ```sh
-./launch.sh     # configure if needed, build, and run
+./launch.sh     # build and run
 ```
 
-`launch.sh` kills any emulator left over from a previous run before starting a
+`launch.sh` only builds and runs — it never installs or configures. If a tool
+is missing it says so and points back at `./install.sh`, because the failures
+otherwise appear a long way from their cause: make runs an empty tool path as
+a command, and a missing `sox` once surfaced as the sample packer complaining
+about absent WAV files.
+
+It also kills any emulator left over from a previous run before starting a
 new one. Stacked windows are easy to create and very confusing to debug, since
 the oldest window keeps running an old build and fixes appear to do nothing.
 

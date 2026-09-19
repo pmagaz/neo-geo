@@ -42,10 +42,23 @@ if pgrep -f "gngeo|mame.*neogeo" >/dev/null 2>&1; then
     done
 fi
 
+# This script does not install or configure anything - ./install.sh does that.
+# It only checks that it was run, because the failures otherwise appear a long
+# way from the cause: an empty path in config.mk is run by make as a command,
+# and a missing sox surfaced as vromtool complaining about absent WAV files.
 if [ ! -f config.mk ]; then
-    echo "config.mk missing, running ./configure first"
-    ./configure
+    echo "error: config.mk is missing. Run ./install.sh first." >&2
+    exit 1
 fi
+
+for var in PYTHON SOX CONVERT M68KGCC Z80SDAS TILETOOL VROMTOOL ROMTOOL GNGEO; do
+    if [ -z "$(sed -n "s/^$var=//p" config.mk | head -1)" ]; then
+        echo "error: config.mk has no path for $var." >&2
+        echo "       A tool was missing when it was written." >&2
+        echo "       Run ./install.sh to install it and reconfigure." >&2
+        exit 1
+    fi
+done
 
 if [ "$BUILD" = yes ]; then
     gmake
