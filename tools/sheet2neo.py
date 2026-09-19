@@ -168,7 +168,11 @@ def main():
             px[x, y] = snap((r, g, b)) + (255,) if alpha > 127 else (0, 0, 0, 0)
 
     quant = out.convert("RGB").quantize(colors=args.colors, method=Image.MEDIANCUT)
+    # Art with few distinct colours quantises to fewer than asked for, and
+    # then the palette comes back short. Pad it, or the entries past the end
+    # are missing rather than black.
     src_pal = quant.getpalette()[: args.colors * 3]
+    src_pal += [0] * (args.colors * 3 - len(src_pal))
 
     # Shift every colour up by one so index 0 can mean transparent.
     indexed = Image.new("P", out.size, 0)
@@ -192,6 +196,7 @@ def main():
 def write_header(args, palette, anims, tw, th, sheet_w):
     name = args.name
     up = name.upper()
+    palette = list(palette) + [0] * (48 - len(palette))
     words = [0x8000 if i == 0 else
              to_color_word(*palette[i * 3: i * 3 + 3]) for i in range(16)]
 

@@ -493,9 +493,11 @@ static void update_hero(void) {
         hero_vy = JUMP_SPEED;
         frame = 1;
         play_sound(SND_JUMP);
+#ifdef HERO_CROUCH_FRAMES
     } else if (pad & CNT_DOWN) {
         set_state(ST_CROUCH);
         advance_once(HERO_CROUCH_FRAMES, CROUCH_RATE);
+#endif
     } else if (pad & (CNT_LEFT | CNT_RIGHT)) {
         set_state(ST_WALK);
         if (pad & CNT_LEFT) { hero_world_x -= WALK_SPEED; facing = FACING_LEFT; }
@@ -528,7 +530,9 @@ static void update_hero(void) {
     switch (state) {
     case ST_ATTACK: row = HERO_ATTACK_ROW; break;
     case ST_JUMP:   row = HERO_JUMP_ROW;   break;
+#ifdef HERO_CROUCH_ROW
     case ST_CROUCH: row = HERO_CROUCH_ROW; break;
+#endif
     default:        row = HERO_WALK_ROW;   break;   /* idle rests on walk[0] */
     }
 
@@ -714,7 +718,11 @@ int main(void) {
         show_hero(1);
 
         dissolve_in();
+        #ifdef HERO_CROUCH_ROW
         ng_center_text(2, 0, "A D WALK  W JUMP  S CROUCH  J HIT");
+#else
+        ng_center_text(2, 0, "A D WALK   W JUMP   J HIT");
+#endif
 
 
         for (;;) {
