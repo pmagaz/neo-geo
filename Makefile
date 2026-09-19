@@ -95,7 +95,7 @@ PREPPED=$(BUILDDIR)/assets/hero-sheet.png
 # it, so the backdrop is keyed out and the art scaled down before conversion.
 # Depends on the makefile too, so changing --height actually rebuilds it.
 $(PREPPED): $(SHEET) tools/prep_sheet.py Makefile | $(BUILDDIR)/assets
-	$(PYTHON) tools/prep_sheet.py $(SHEET) -o $@ --height 64
+	$(PYTHON) tools/prep_sheet.py $(SHEET) -o $@ --height 80
 
 assets/images/sprites/hero.gif assets/images/sprites/hero.h: $(PREPPED) tools/sheet2neo.py tools/neogeo_color.py
 	PYTHONPATH=tools $(PYTHON) tools/sheet2neo.py $(PREPPED) \
